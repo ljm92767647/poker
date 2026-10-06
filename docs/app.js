@@ -1,5 +1,5 @@
 const $=s=>document.querySelector(s),ranks='AKQJT98765432',symbols=['♠','♥','♦','♣'],names=['하이 카드','원페어','투페어','트리플','스트레이트','플러시','풀하우스','포카드','스트레이트 플러시','로열 플러시'];
-let hand=[25,24],board=[23,22,39],opponent=[null,null],target=['hand',0],worker,result;
+let hand=[null,null],board=[],opponent=[null,null],target=['hand',0],worker,result;
 const id=(r,s)=>s*13+'23456789TJQKA'.indexOf(r), cardLabel=c=>ranks[14-(c%13+2)]+symbols[Math.floor(c/13)],pct=v=>v.toFixed(1)+'%';
 function card(c,group,index){const face=`<button class="card ${c!==null&&[1,2].includes(Math.floor(c/13))?'red':''} ${c===null?'empty':''} ${target[0]===group&&target[1]===index?'selected':''}" ${group?`data-group="${group}" data-index="${index}"`:''} aria-label="${c===null?'빈 카드':cardLabel(c)}${group?' 선택':''}">${c===null?'+':`<span>${ranks[14-(c%13+2)]}</span><span class="suit">${symbols[Math.floor(c/13)]}</span>`}</button>`;return group?`<div class="card-slot">${face}${c!==null?`<button class="card-remove" data-remove-group="${group}" data-remove-index="${index}" aria-label="${group==='board'?'바닥패':group==='hand'?'내 패':'상대 패'} ${cardLabel(c)} 지우기" title="이 카드만 지우기">×</button>`:''}</div>`:face}
 function removeCard(group,index){if(group==='board'){board.splice(index,1);target=['board',board.length]}else{(group==='hand'?hand:opponent)[index]=null;target=[group,index]}render();calculate()}

@@ -18,20 +18,20 @@ function opponentWaits(board,deck,opponent,baseline){
  }).filter(w=>w.river>0||w.cards.length);
 }
 function analyze({hand,board,opponent=[]}){
- const known=[...hand,...board,...opponent],deck=fullDeck().filter(c=>!known.includes(c)),hist=Array(10).fill(0),base=Array(10).fill(0),oppHist=Array.from({length:3},()=>Array(10).fill(0)),scores=Array.from({length:3},()=>({win:0,tie:0,share:0}));
+ const maxOpponents=8,known=[...hand,...board,...opponent],deck=fullDeck().filter(c=>!known.includes(c)),hist=Array(10).fill(0),base=Array(10).fill(0),oppHist=Array.from({length:maxOpponents},()=>Array(10).fill(0)),scores=Array.from({length:maxOpponents},()=>({win:0,tie:0,share:0}));
  if(hand.length!==2||![0,3,4,5].includes(board.length)||new Set(known).size!==known.length)throw Error('카드를 확인하세요.');
  let seed=known.reduce((a,c)=>(Math.imul(a,31)+c+1)>>>0,90210)||1;const rand=()=>{seed^=seed<<13;seed^=seed>>>17;seed^=seed<<5;return (seed>>>0)/4294967296};const iterations=40000;
  for(let k=0;k<iterations;k++){
   const d=deck.slice();let at=0;const draw=()=>{const j=at+Math.floor(rand()*(d.length-at));[d[j],d[at]]=[d[at],d[j]];return d[at++]};
   // The benchmark always uses unknown cards, even when one opponent is specified.
-  const holes=Array.from({length:3},(_,p)=>p===0&&opponent.length===2?opponent:[draw(),draw()]);
+  const holes=Array.from({length:maxOpponents},(_,p)=>p===0&&opponent.length===2?opponent:[draw(),draw()]);
   const b=board.slice();while(b.length<5)b.push(draw());const hero=ev([...hand,...b]);hist[catOf(hero)]++;let best=hero,winners=1;const seen=new Set();
-  for(let p=0;p<3;p++){const value=ev([...holes[p],...b]);if(!(p===0&&opponent.length===2))base[catOf(value)]++;seen.add(catOf(value));seen.forEach(c=>oppHist[p][c]++);if(value>best){best=value;winners=1}else if(value===best)winners++;if(best===hero){if(winners===1)scores[p].win++;else scores[p].tie++;scores[p].share+=1/winners}}
+  for(let p=0;p<maxOpponents;p++){const value=ev([...holes[p],...b]);if(!(p===0&&opponent.length===2))base[catOf(value)]++;seen.add(catOf(value));seen.forEach(c=>oppHist[p][c]++);if(value>best){best=value;winners=1}else if(value===best)winners++;if(best===hero){if(winners===1)scores[p].win++;else scores[p].tie++;scores[p].share+=1/winners}}
  }
- const heroDist=board.length>=3?finalDistribution(hand,board,deck).hist:hist.map(v=>v/iterations*100),baseN=iterations*(opponent.length===2?2:3),average=board.length>=3?averageDistribution(board,deck):null,baseline=average?average.hist:base.map(v=>v/baseN*100);
+ const heroDist=board.length>=3?finalDistribution(hand,board,deck).hist:hist.map(v=>v/iterations*100),baseN=iterations*(maxOpponents-(opponent.length===2?1:0)),average=board.length>=3?averageDistribution(board,deck):null,baseline=average?average.hist:base.map(v=>v/baseN*100);
  const opponentDraws=opponentWaits(board,deck,opponent,baseline);
- const opponents=oppHist.map(h=>h.map(v=>v/iterations*100));if(board.length>=3){const exactOne=opponent.length===2?finalDistribution(opponent,board,deck).hist:baseline.slice(),sampleOne=opponents[0].slice();for(let p=1;p<3;p++)for(let c=0;c<10;c++)opponents[p][c]=Math.min(100,exactOne[c]+Math.max(0,opponents[p][c]-sampleOne[c]));opponents[0]=exactOne}
- return {hero:heroDist,baseline,opponents,scores:scores.map(s=>({win:s.win/iterations*100,tie:s.tie/iterations*100,equity:s.share/iterations*100,lose:100-(s.win+s.tie)/iterations*100})),waits:waits(hand,board,deck),opponentDraws,current:board.length>=3?catOf(ev([...hand,...board])):null,iterations,exact:board.length>=3,averageCombos:average?.total||0,remaining:deck.length};
+ const opponents=oppHist.map(h=>h.map(v=>v/iterations*100));if(board.length>=3){const exactOne=opponent.length===2?finalDistribution(opponent,board,deck).hist:baseline.slice(),sampleOne=opponents[0].slice();for(let p=1;p<maxOpponents;p++)for(let c=0;c<10;c++)opponents[p][c]=Math.min(100,exactOne[c]+Math.max(0,opponents[p][c]-sampleOne[c]));opponents[0]=exactOne}
+ return {hero:heroDist,baseline,opponents,scores:scores.map(s=>({win:s.win/iterations*100,tie:s.tie/iterations*100,equity:s.share/iterations*100,lose:100-(s.win+s.tie)/iterations*100})),waits:waits(hand,board,deck),opponentDraws,current:board.length>=3?catOf(ev([...hand,...board])):null,made:catOf(ev([...hand,...board])),iterations,exact:board.length>=3,averageCombos:average?.total||0,remaining:deck.length};
 }
 if(typeof self!=='undefined')self.onmessage=e=>{try{self.postMessage({result:analyze(e.data)})}catch(error){self.postMessage({error:error.message})}};
 if(typeof module!=='undefined')module.exports={analyze,waits,finalDistribution,averageDistribution,opponentWaits};

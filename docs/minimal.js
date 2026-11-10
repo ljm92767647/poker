@@ -18,7 +18,16 @@ function render(){
  $('#peopleValue').textContent=people+'명';document.querySelectorAll('[data-people]').forEach(b=>{const selected=Number(b.dataset.people)===people;b.classList.toggle('active',selected);b.setAttribute('aria-pressed',String(selected))});
 }
 function clear(){result=null;$('#equity').textContent=$('#win').textContent=$('#tie').textContent=$('#lose').textContent='—';$('#equityBar').style.width='0%';$('#currentHand').textContent='—';$('#heroProb').innerHTML=$('#opponentProb').innerHTML=$('#playerCompare').innerHTML='';$('#myWaits').innerHTML=$('#theirWaits').innerHTML='바닥패 3장부터 표시';$('#waitStage').textContent='—';}
-function calculate(){if(worker)worker.terminate();clear();if(hand.includes(null)){$('#status').textContent='내 패 두 장을 선택하세요';return}if(![0,3,4,5].includes(board.length)){$('#status').textContent='바닥패를 3장 이상 선택하세요';return}if(opponent.filter(c=>c!==null).length===1){$('#status').textContent='상대 패를 두 장 선택하거나 지우세요';return}$('#status').textContent='계산 중…';worker=new Worker('minimal-engine.js?v=20261020');worker.onmessage=e=>{if(e.data.error){$('#status').textContent=e.data.error;return}result=e.data.result;$('#status').textContent=board.length>=3?'족보·평균 전수 계산 · 쇼다운 4만 회 추정':'4만 회 추정';display()};worker.onerror=()=>{$('#status').textContent='계산 오류 · 다시 선택하세요'};worker.postMessage({hand,board,opponent:opponent.includes(null)?[]:opponent})}
+function calculate(){if(worker)worker.terminate();clear();window.refreshBetAnalysis?.();if(hand.includes(null)){$('#status').textContent='내 패 두 장을 선택하세요';return}if(![0,3,4,5].includes(board.length)){$('#status').textContent='바닥패를 3장 이상 선택하세요';return}if(opponent.filter(c=>c!==null).length===1){$('#status').textContent='상대 패를 두 장 선택하거나 지우세요';return}$('#status').textContent='계산 중…';worker=new Worker('minimal-engine.js?v=20261110');worker.onmessage=e=>{if(e.data.error){$('#status').textContent=e.data.error;return}result=e.data.result;$('#status').textContent=board.length>=3?'족보·평균 전수 계산 · 쇼다운 4만 회 추정':'4만 회 추정';display()};worker.onerror=()=>{$('#status').textContent='계산 오류 · 다시 선택하세요'};worker.postMessage({hand,board,opponent:opponent.includes(null)?[]:opponent})}
+function drawTable(cards, nextCards){
+ const isExact=people===2&&!opponent.includes(null)&&board.length===4;
+ const rows=cards.map(c=>{
+  const next=nextCards[c],outcome=next.scores[people-2];
+  const exact=outcome.win?'단독 승리':outcome.tie?'공동승리 · 팟 나눔':'패배';
+  return `<tr><td><button class="chip ${[1,2].includes(Math.floor(c/13))?'red':''}" data-out="${c}" aria-label="${cardName(c)} 바닥패에 적용">${cardName(c)}</button></td><td>${names[next.cat]}</td>${isExact?`<td class="${outcome.win||outcome.tie?'draw-result':'dim'}">${exact}</td>`:`<td class="draw-result">${percentage(outcome.win)}</td><td>${percentage(outcome.tie)}</td>`}</tr>`;
+ });
+ return `<table><thead><tr><th>카드</th><th>나온 직후 족보</th>${isExact?'<th>리버 결과</th>':'<th>단독 승리</th><th>공동승리</th>'}</tr></thead><tbody>${rows.join('')}</tbody></table>`;
+}
 function display(){if(!result)return;const r=result,s=r.scores[people-2];$('#equity').textContent=percentage(s.equity);$('#equityBar').style.width=s.equity+'%';$('#win').textContent=percentage(s.win);$('#tie').textContent=percentage(s.tie);$('#lose').textContent=percentage(s.lose);$('#currentHand').textContent=r.current===null?'프리플랍':`현재 ${names[r.current]}`;
  $('#playerCompare').innerHTML=r.scores.map((x,i)=>`<tr class="${people===i+2?'active-row':''}"><td><button data-size="${i+2}">${i+2}명</button></td><td class="accent">${percentage(x.equity)}</td><td>${percentage(x.win)}</td><td>${percentage(x.tie)}</td></tr>`).join('');
  $('#heroProb').innerHTML=Array.from({length:9},(_,i)=>i+1).reverse().map(c=>{const diff=r.hero[c]-r.baseline[c],change=Math.abs(diff)<.005?'≈0':(diff>0?'+':'')+diff.toFixed(Math.abs(diff)<.1?2:1),ratio=r.baseline[c]>0?(r.hero[c]/r.baseline[c]).toFixed(1)+'배':'비교 기준 0%',made=c===r.made;return `<tr class="${made?'made-row':''}"><td>${names[c]}</td><td class="made-column">${made?'<strong class="made-badge" title="현재 이미 완성한 최상위 족보입니다. 취소선 수치는 리버에서 이 족보로 남는 확률입니다.">완성</strong>':''}</td><td class="accent prob-value"><span>${percentage(r.hero[c])}</span></td><td class="prob-value"><span>${percentage(r.baseline[c])}</span></td><td title="평균 대비 ${ratio}" class="prob-value ${diff>.05?'positive':'dim'}"><span>${change}%p</span></td></tr>`}).join('');
@@ -26,15 +35,22 @@ function display(){if(!result)return;const r=result,s=r.scores[people-2];$('#equ
  $('#oneOpponentLabel').textContent=opponent.includes(null)?'상대 한 명':'지정 상대';
  $('#opponentProb').innerHTML=board.length<3?'<tr><td colspan="3" class="empty">바닥패 3장부터 표시</td></tr>':Array.from({length:9},(_,i)=>i+1).reverse().map(c=>`<tr><td>${names[c]}</td><td>${percentage(r.opponents[0][c])}</td><td class="accent">${percentage(r.opponents[people-2][c])}</td></tr>`).join('');
  $('#waitStage').textContent=board.length===3?'턴까지 1장 · 리버까지 2장':board.length===4?'리버까지 1장':board.length===5?'공개 완료':'—';
- const chips=cs=>`<div class="out-cards">${cs.map(c=>`<button class="chip ${[1,2].includes(Math.floor(c/13))?'red':''}" data-out="${c}" aria-label="${cardName(c)} 바닥패에 적용">${cardName(c)}</button>`).join('')}</div>`;
  const probs=w=>`<div class="wait-probs">${w.outs.length?`<span>다음 카드 <b>${percentage(w.next)}</b></span><span>리버까지 카드 <b>${percentage(w.hit)}</b></span>`:''}<span>리버 완성 <b>${percentage(w.river)}</b></span></div>`;
- $('#myWaits').innerHTML=board.length<3?'바닥패 3장부터 표시':board.length===5?'리버 공개 완료':r.waits.length?r.waits.map(w=>`<div class="wait-row"><div class="wait-head"><b>${names[w.cat]}</b><span class="dim">${w.outs.length?w.outs.length+'장':'두 장 필요'}</span></div>${w.outs.length?chips(w.outs):''}${probs(w)}</div>`).join(''):'더 높은 족보로 이어지는 카드 없음';
+ if(board.length===3||board.length===4){
+  const ordered=Object.keys(r.nextCards).map(Number).sort((a,b)=>b%13-a%13||a-b);
+  const isExact=people===2&&!opponent.includes(null)&&board.length===4;
+  const note=`${people}명 · ${opponent.includes(null)?'상대 무작위':'지정 상대 포함'} · ${isExact?'리버 결과':'리버 결과 추정'}`;
+  $('#myWaits').innerHTML=`<p class="micro">${note} · 카드를 누르면 바닥에 추가</p>`+
+   r.waits.map(w=>`<div class="wait-row"><div class="wait-head"><b>${names[w.cat]}</b><span class="dim">${w.outs.length?w.outs.length+'장':'두 장 필요'}</span></div>${probs(w)}${w.outs.length?`<details class="draw-preview"><summary>카드별 족보·승리 결과</summary>${drawTable(ordered.filter(c=>w.outs.includes(c)),r.nextCards)}</details>`:''}</div>`).join('')+
+   `<details class="draw-preview draw-all"><summary>다음 카드 전체 보기</summary>${drawTable(ordered,r.nextCards)}</details>`;
+ }else $('#myWaits').textContent=board.length<3?'바닥패 3장부터 표시':'리버 공개 완료';
  $('#opponentMode').textContent=opponent.includes(null)?'미지 패 전체 조합':'지정 상대 패';
  $('#theirWaits').innerHTML=board.length<3?'바닥패 3장부터 표시':board.length===5?'리버 공개 완료':r.opponentDraws.length?r.opponentDraws.map(w=>`<div class="wait-row"><div class="wait-head"><b>${names[w.cat]}</b><span class="dim">${w.outs.length}장</span></div>${w.cards.length?`<details class="conditional-cards"><summary>${w.fixed?'대기 카드':'확률이 높아지는 카드'} 보기</summary><div class="out-cards">${w.cards.map(x=>`<button class="chip ${[1,2].includes(Math.floor(x.card/13))?'red':''}" data-out="${x.card}" aria-label="${cardName(x.card)} 바닥패에 적용">${cardName(x.card)}${x.after===null?'':`<small>${percentage(x.after)}</small>`}</button>`).join('')}</div></details>`:'<span class="dim">한 장으로 더 유리해지는 카드 없음</span>'}${probs(w)}</div>`).join(''):'더 높은 족보로 이어지는 카드 없음';
  document.querySelectorAll('[data-size]').forEach(b=>b.onclick=()=>setPeople(Number(b.dataset.size)));
  document.querySelectorAll('[data-out]').forEach(b=>b.onclick=()=>{const c=Number(b.dataset.out);if(board.length>=5||[...hand,...board,...opponent].includes(c))return;board.push(c);target=['board',Math.min(board.length,4)];render();calculate()});
+ window.updateBetResults?.();
 }
-function setPeople(n){if(!Number.isInteger(n)||n<2||n>9)return;people=n;render();display()}
+function setPeople(n){if(!Number.isInteger(n)||n<2||n>9)return;people=n;render();display();window.refreshBetAnalysis?.()}
 const peopleDialog=$('#peopleDialog');$('#peopleGrid').innerHTML=Array.from({length:8},(_,i)=>`<button data-people="${i+2}" aria-pressed="${i===0}">${i+2}명</button>`).join('')+'<span class="people-empty" aria-hidden="true"></span>';
 $('#peopleButton').onclick=()=>{peopleDialog.showModal();$('#peopleButton').setAttribute('aria-expanded','true')};$('#closePeople').onclick=()=>peopleDialog.close();peopleDialog.addEventListener('close',()=>$('#peopleButton').setAttribute('aria-expanded','false'));
 document.querySelectorAll('[data-people]').forEach(b=>b.onclick=()=>{setPeople(Number(b.dataset.people));peopleDialog.close()});
